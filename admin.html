@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>心聲管道｜管理後台</title>
+<meta name="robots" content="noindex">
+<meta charset="utf-8">
+<style>
+  :root { --main:#8a6a4f; --bg:#faf7f3; --line:#e5dccf; --soft:#f3ece3; --text:#3a332d; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif; font-size:14px; line-height:1.6; }
+  .wrap { max-width:1100px; margin:0 auto; padding:20px 16px 60px; }
+  h1 { font-size:20px; margin:4px 0 14px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+  input, select, textarea { padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit; background:#fff; }
+  textarea { width:100%; min-height:110px; resize:vertical; }
+  .btn { padding:9px 18px; border:none; border-radius:8px; background:var(--main); color:#fff; font-size:14px; cursor:pointer; }
+  .btn:disabled { opacity:.5; }
+  .btn.ghost { background:#fff; color:var(--main); border:1px solid var(--main); }
+  .err { color:#c0392b; margin:6px 0; min-height:1em; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .stats { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 14px; cursor:pointer; }
+  .stat b { font-size:18px; margin-left:4px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  th, td { padding:9px 10px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:var(--soft); font-weight:600; white-space:nowrap; }
+  tr.row { cursor:pointer; } tr.row:hover { background:#fcfaf7; }
+  .code { font-family:monospace; font-weight:700; letter-spacing:1px; }
+  .badge { display:inline-block; padding:1px 9px; border-radius:20px; font-size:12px; color:#fff; white-space:nowrap; }
+  .s-未處理 { background:#b0a69b; } .s-處理中 { background:#d68b2f; } .s-待員工回覆 { background:#3d7dca; } .s-已結案 { background:#4f9a62; }
+  .new { color:#c0392b; font-weight:700; font-size:12px; }
+  .urgent { color:#c0392b; font-weight:700; }
+  .grid { display:grid; grid-template-columns:140px 1fr; gap:4px 12px; }
+  .grid div:nth-child(odd) { color:#8b8177; }
+  .grid div:nth-child(even) { white-space:pre-wrap; }
+  .msg { border-radius:10px; padding:10px 12px; margin:8px 0; white-space:pre-wrap; }
+  .msg.員工 { background:var(--soft); margin-right:40px; }
+  .msg.管理者 { background:#e8f0f8; margin-left:40px; }
+  .msg .meta { font-size:12px; color:#8b8177; }
+  .hidden { display:none; }
+  .tip { font-size:12px; color:#8b8177; }
+  @media (max-width:700px) { .hide-m { display:none; } .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔒 跨部門心聲與溝通反映管道｜管理後台</h1>
+
+  <!-- 登入 -->
+  <div id="login" class="card" style="max-width:360px">
+    <div style="margin-bottom:8px">請輸入後台密碼</div>
+    <input type="password" id="pw" style="width:100%" onkeydown="if(event.key==='Enter')login()">
+    <div class="err" id="lErr"></div>
+    <button class="btn" onclick="login()">登入</button>
+  </div>
+
+  <!-- 列表 -->
+  <div id="listView" class="hidden">
+    <div class="stats" id="stats"></div>
+    <div class="bar">
+      <select id="fStatus" onchange="renderList()">
+        <option value="">全部狀態</option>
+        <option>未處理</option><option>處理中</option><option>待員工回覆</option><option>已結案</option>
+      </select>
+      <select id="fUnit" onchange="renderList()"><option value="">全部單位</option></select>
+      <label><input type="checkbox" id="fNew" onchange="renderList()"> 只看員工新留言</label>
+      <input type="text" id="fSearch" placeholder="搜尋代碼或內容" oninput="renderList()">
+      <button class="btn ghost" onclick="loadList()">重新整理</button>
+    </div>
+    <table>
+      <thead><tr><th>代碼</th><th>狀態</th><th>單位</th><th class="hide-m">急迫性</th><th class="hide-m">影響</th><th>內容摘要</th><th class="hide-m">最後更新</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- 案件 -->
+  <div id="caseView" class="hidden">
+    <button class="btn ghost" onclick="backToList()">← 返回列表</button>
+    <div class="card" style="margin-top:12px">
+      <div style="font-size:16px">代碼 <span class="code" id="cCode"></span>　<span class="badge" id="cStatus"></span></div>
+      <div class="grid" id="cFields" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600">對話紀錄</div>
+      <div id="cMsgs"></div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:6px">回覆員工</div>
+      <div class="tip" style="margin-bottom:6px">員工用代碼查詢就會看到這則回覆。請避免寫出可辨識身分的細節。</div>
+      <textarea id="cReply" placeholder="輸入回覆內容（可留空，只更新狀態）"></textarea>
+      <div class="bar" style="margin-top:8px">
+        <span>狀態改為</span>
+        <select id="cNewStatus"></select>
+        <button class="btn" id="cBtn" onclick="saveReply()">儲存</button>
+      </div>
+      <div class="err" id="cErr"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ★ 跟 index.html 一樣，貼上 Apps Script 的 /exec 網址
+  const API_URL = 'https://script.google.com/macros/s/AKfycbxH-3Usw7pYeJNCFXp6v96-3JFn60KyPUF6E_AmSiVxdRbxRvycMZ3db5ERw1ZZgVFLww/exec';
+
+  function api(action, payload) {
+    return fetch(API_URL, { method: 'POST', body: JSON.stringify(Object.assign({ action: action }, payload)) })
+      .then(r => r.json())
+      .catch(() => { throw new Error('連線失敗，請檢查網路後再試'); })
+      .then(res => { if (!res.ok) throw new Error(res.error || '發生錯誤'); return res.data; });
+  }
+
+  let token = '';
+  let cases = [];
+  let currentCode = '';
+  const FIELD_ORDER = ['提交時間','涉及單位','急迫性','影響程度','發生頻率','同事討論過','問題描述','主要原因','曾嘗試方式','建議解決管道','期望解決方案','個人發展感受','其他建議','姓名或聯絡方式'];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fail(elId) { return err => {
+    if (/登入逾時/.test(err.message)) { logout(); $('lErr').textContent = err.message; return; }
+    $(elId).textContent = err.message;
+  }; }
+
+  try { token = sessionStorage.getItem('xs_admin_token') || ''; } catch (e) {}
+  if (token) { enter(); }
+
+  function login() {
+    $('lErr').textContent = '';
+    api('adminLogin', { password: $('pw').value })
+      .then(t => { token = t; try { sessionStorage.setItem('xs_admin_token', t); } catch (e) {} enter(); })
+      .catch(err => { $('lErr').textContent = err.message; });
+  }
+  function logout() {
+    token = ''; try { sessionStorage.removeItem('xs_admin_token'); } catch (e) {}
+    $('login').classList.remove('hidden'); $('listView').classList.add('hidden'); $('caseView').classList.add('hidden');
+  }
+  function enter() { $('login').classList.add('hidden'); $('listView').classList.remove('hidden'); loadList(); }
+
+  function loadList() {
+    api('adminList', { token: token })
+      .then(list => { cases = list; buildUnits(); renderStats(); renderList(); })
+      .catch(fail('lErr'));
+  }
+
+  function buildUnits() {
+    const sel = $('fUnit'), cur = sel.value;
+    const units = Array.from(new Set(cases.map(c => c.unit))).filter(Boolean);
+    sel.innerHTML = '<option value="">全部單位</option>' + units.map(u => '<option>' + esc(u) + '</option>').join('');
+    sel.value = cur;
+  }
+
+  function renderStats() {
+    const cnt = s => cases.filter(c => c.status === s).length;
+    const newMsg = cases.filter(c => c.lastSpeaker === '員工' && c.status !== '未處理').length;
+    $('stats').innerHTML =
+      ['未處理','處理中','待員工回覆','已結案'].map(s => '<div class="stat" onclick="$(\'fStatus\').value=\'' + s + '\';renderList()"><span class="badge s-' + s + '">' + s + '</span><b>' + cnt(s) + '</b></div>').join('') +
+      '<div class="stat" onclick="$(\'fNew\').checked=true;renderList()">🔔 員工新留言<b>' + newMsg + '</b></div>';
+  }
+
+  function renderList() {
+    const st = $('fStatus').value, un = $('fUnit').value, onlyNew = $('fNew').checked, q = $('fSearch').value.trim().toUpperCase();
+    const list = cases.filter(c =>
+      (!st || c.status === st) && (!un || c.unit === un) &&
+      (!onlyNew || (c.lastSpeaker === '員工' && c.status !== '未處理')) &&
+      (!q || c.code.indexOf(q) >= 0 || String(c.snippet).toUpperCase().indexOf(q) >= 0));
+    $('tbody').innerHTML = list.length ? list.map(c => {
+      const isNew = c.lastSpeaker === '員工' && c.status !== '未處理';
+      const urgent = String(c.urgency).indexOf('非常緊急') === 0;
+      return '<tr class="row" onclick="openCase(\'' + esc(c.code) + '\')">' +
+        '<td class="code">' + esc(c.code) + (isNew ? '<br><span class="new">● 新留言</span>' : '') + '</td>' +
+        '<td><span class="badge s-' + esc(c.status) + '">' + esc(c.status) + '</span></td>' +
+        '<td>' + esc(c.unit) + '</td>' +
+        '<td class="hide-m' + (urgent ? ' urgent' : '') + '">' + esc(String(c.urgency).replace(/（.*）/, '')) + '</td>' +
+        '<td class="hide-m">' + esc(c.impact) + '</td>' +
+        '<td>' + esc(c.snippet) + '</td>' +
+        '<td class="hide-m">' + esc(c.updated) + '</td></tr>';
+    }).join('') : '<tr><td colspan="7" style="text-align:center;color:#8b8177">沒有符合的案件</td></tr>';
+  }
+
+  function openCase(code) {
+    api('adminGetCase', { token: token, code: code })
+      .then(renderCase)
+      .catch(fail('lErr'));
+  }
+
+  function renderCase(c) {
+    currentCode = c.code;
+    $('listView').classList.add('hidden'); $('caseView').classList.remove('hidden');
+    $('cCode').textContent = c.code;
+    $('cStatus').textContent = c.fields['處理狀態'];
+    $('cStatus').className = 'badge s-' + c.fields['處理狀態'];
+    $('cFields').innerHTML = FIELD_ORDER.filter(k => c.fields[k]).map(k => '<div>' + esc(k) + '</div><div>' + esc(c.fields[k]) + '</div>').join('');
+    $('cMsgs').innerHTML = c.messages.length
+      ? c.messages.map(m => '<div class="msg ' + esc(m.who) + '"><div class="meta">' + esc(m.who) + '・' + esc(m.time) + '</div>' + esc(m.text) + '</div>').join('')
+      : '<div class="tip" style="margin-top:6px">尚無對話</div>';
+    $('cNewStatus').innerHTML = c.statuses.map(s => '<option' + (s === c.fields['處理狀態'] ? ' selected' : '') + '>' + s + '</option>').join('');
+    // 第一次回覆時，預設把「未處理」改成「處理中」
+    if (c.fields['處理狀態'] === '未處理') $('cNewStatus').value = '處理中';
+    $('cReply').value = ''; $('cErr').textContent = '';
+    window.scrollTo(0, 0);
+  }
+
+  function saveReply() {
+    $('cErr').textContent = ''; $('cBtn').disabled = true;
+    api('adminReply', { token: token, code: currentCode, text: $('cReply').value.trim(), status: $('cNewStatus').value })
+      .then(c => { $('cBtn').disabled = false; renderCase(c); })
+      .catch(err => { $('cBtn').disabled = false; fail('cErr')(err); });
+  }
+
+  function backToList() { $('caseView').classList.add('hidden'); $('listView').classList.remove('hidden'); loadList(); }
+</script>
+</body>
+</html>
