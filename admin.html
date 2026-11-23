@@ -39,6 +39,10 @@
   .msg.管理者 { background:#e8f0f8; margin-left:40px; }
   .msg .meta { font-size:12px; color:#8b8177; }
   .hidden { display:none; }
+  .atts { display:flex; flex-wrap:wrap; gap:10px; margin-top:8px; }
+  .att { width:130px; text-decoration:none; color:var(--text); font-size:12px; text-align:center; }
+  .att .th { width:130px; height:100px; border-radius:8px; border:1px solid var(--line); background:var(--soft); display:flex; align-items:center; justify-content:center; font-size:30px; overflow:hidden; }
+  .att .th img { width:100%; height:100%; object-fit:cover; }
   .tip { font-size:12px; color:#8b8177; }
   @media (max-width:700px) { .hide-m { display:none; } .grid { grid-template-columns:1fr; } }
 </style>
@@ -81,6 +85,11 @@
       <div style="font-size:16px">代碼 <span class="code" id="cCode"></span>　<span class="badge" id="cStatus"></span></div>
       <div class="grid" id="cFields" style="margin-top:10px"></div>
     </div>
+    <div class="card hidden" id="cAttachCard">
+      <div style="font-weight:600">📎 附件</div>
+      <div class="tip">點縮圖在雲端硬碟開啟（需登入你的 Google 帳號）</div>
+      <div id="cAttach" class="atts"></div>
+    </div>
     <div class="card">
       <div style="font-weight:600">對話紀錄</div>
       <div id="cMsgs"></div>
@@ -116,6 +125,8 @@
   const FIELD_ORDER = ['提交時間','涉及單位','急迫性','影響程度','發生頻率','同事討論過','問題描述','主要原因','曾嘗試方式','建議解決管道','期望解決方案','個人發展感受','其他建議','姓名或聯絡方式'];
 
   function $(id) { return document.getElementById(id); }
+  // 員工有新留言、還沒點開看過、且未結案
+  function isUnread(c) { return c.lastSpeaker === '員工' && c.status !== '未處理' && c.status !== '已結案'; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function fail(elId) { return err => {
     if (/登入逾時/.test(err.message)) { logout(); $('lErr').textContent = err.message; return; }
@@ -152,7 +163,7 @@
 
   function renderStats() {
     const cnt = s => cases.filter(c => c.status === s).length;
-    const newMsg = cases.filter(c => c.lastSpeaker === '員工' && c.status !== '未處理').length;
+    const newMsg = cases.filter(isUnread).length;
     $('stats').innerHTML =
       ['未處理','處理中','待員工回覆','已結案'].map(s => '<div class="stat" onclick="$(\'fStatus\').value=\'' + s + '\';renderList()"><span class="badge s-' + s + '">' + s + '</span><b>' + cnt(s) + '</b></div>').join('') +
       '<div class="stat" onclick="$(\'fNew\').checked=true;renderList()">🔔 員工新留言<b>' + newMsg + '</b></div>';
@@ -162,10 +173,10 @@
     const st = $('fStatus').value, un = $('fUnit').value, onlyNew = $('fNew').checked, q = $('fSearch').value.trim().toUpperCase();
     const list = cases.filter(c =>
       (!st || c.status === st) && (!un || c.unit === un) &&
-      (!onlyNew || (c.lastSpeaker === '員工' && c.status !== '未處理')) &&
+      (!onlyNew || isUnread(c)) &&
       (!q || c.code.indexOf(q) >= 0 || String(c.snippet).toUpperCase().indexOf(q) >= 0));
     $('tbody').innerHTML = list.length ? list.map(c => {
-      const isNew = c.lastSpeaker === '員工' && c.status !== '未處理';
+      const isNew = isUnread(c);
       const urgent = String(c.urgency).indexOf('非常緊急') === 0;
       return '<tr class="row" onclick="openCase(\'' + esc(c.code) + '\')">' +
         '<td class="code">' + esc(c.code) + (isNew ? '<br><span class="new">● 新留言</span>' : '') + '</td>' +
@@ -191,6 +202,14 @@
     $('cStatus').textContent = c.fields['處理狀態'];
     $('cStatus').className = 'badge s-' + c.fields['處理狀態'];
     $('cFields').innerHTML = FIELD_ORDER.filter(k => c.fields[k]).map(k => '<div>' + esc(k) + '</div><div>' + esc(c.fields[k]) + '</div>').join('');
+    const atts = c.attachments || [];
+    $('cAttachCard').classList.toggle('hidden', !atts.length);
+    $('cAttach').innerHTML = atts.map(a =>
+      '<a class="att" href="' + esc(a.url) + '" target="_blank" rel="noopener"><div class="th">' +
+      (a.type === '照片'
+        ? '<img src="https://drive.google.com/thumbnail?id=' + encodeURIComponent(a.id) + '&sz=w300" onerror="this.parentNode.textContent=\'🖼️\'">'
+        : '🎬') +
+      '</div>' + esc(a.name) + '<br><span class="tip">' + esc(a.source) + '・' + esc(a.time) + '</span></a>').join('');
     $('cMsgs').innerHTML = c.messages.length
       ? c.messages.map(m => '<div class="msg ' + esc(m.who) + '"><div class="meta">' + esc(m.who) + '・' + esc(m.time) + '</div>' + esc(m.text) + '</div>').join('')
       : '<div class="tip" style="margin-top:6px">尚無對話</div>';
